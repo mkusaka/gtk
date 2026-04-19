@@ -110,6 +110,7 @@ Add `--agent <host>` if you want to target a specific host such as `codex` or `c
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm format:check
 pnpm lint
 pnpm test
 pnpm build

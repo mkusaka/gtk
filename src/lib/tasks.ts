@@ -32,10 +32,7 @@ function toTaskSummary(item: tasks_v1.Schema$Task): TaskSummary {
   };
 }
 
-export function selectTaskList(
-  taskLists: TaskListSummary[],
-  identifier: string,
-): TaskListSummary {
+export function selectTaskList(taskLists: TaskListSummary[], identifier: string): TaskListSummary {
   if (identifier === "@default") {
     return {
       id: "@default",
@@ -156,7 +153,7 @@ export async function getTask(
       task: taskId,
     });
     return toTaskSummary(response.data);
-  } catch (error) {
+  } catch {
     throw new CliError(`Task "${taskId}" not found in list "${listId}".`, 1);
   }
 }
@@ -254,10 +251,7 @@ export async function deleteTask(
   });
 }
 
-function findPreviousSiblingId(
-  tasks: TaskSummary[],
-  targetTask: TaskSummary,
-): string | undefined {
+function findPreviousSiblingId(tasks: TaskSummary[], targetTask: TaskSummary): string | undefined {
   const siblings = tasks
     .filter((task) => (task.parent ?? null) === (targetTask.parent ?? null))
     .sort((left, right) => (left.position ?? "").localeCompare(right.position ?? ""));

@@ -60,7 +60,10 @@ export async function saveSessionsStore(store: SessionsStore): Promise<void> {
 }
 
 export function normalizeClientName(name: string): string {
-  const normalized = name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-");
   if (!normalized) {
     throw new CliError("Client name must not be empty.");
   }
@@ -98,10 +101,7 @@ export function resolveClient(store: ClientsStore, requested?: string): StoredCl
   return store.clients[resolveClientName(store, requested)]!;
 }
 
-export function listSessionsForClient(
-  store: SessionsStore,
-  clientName: string,
-): StoredSession[] {
+export function listSessionsForClient(store: SessionsStore, clientName: string): StoredSession[] {
   return Object.values(store.sessions)
     .filter((session) => session.clientName === clientName)
     .sort((left, right) => left.email.localeCompare(right.email));
@@ -148,10 +148,7 @@ export function resolveSession(
   return store.sessions[sessionKey(clientName, resolveSessionEmail(store, clientName, requested))]!;
 }
 
-export function mergeTokens(
-  current: StoredTokens,
-  incoming: StoredTokens,
-): StoredTokens {
+export function mergeTokens(current: StoredTokens, incoming: StoredTokens): StoredTokens {
   const merged: StoredTokens = {
     ...current,
     ...incoming,

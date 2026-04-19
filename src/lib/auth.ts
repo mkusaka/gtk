@@ -7,12 +7,7 @@ import open from "open";
 
 import { CliError } from "./errors.js";
 import { mergeTokens } from "./store.js";
-import type {
-  SessionsStore,
-  StoredClient,
-  StoredSession,
-  StoredTokens,
-} from "./types.js";
+import type { SessionsStore, StoredClient, StoredSession, StoredTokens } from "./types.js";
 
 export const TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
 export const DEFAULT_SCOPES = [TASKS_SCOPE, "openid", "email"];
@@ -71,10 +66,7 @@ function toGoogleCredentials(tokens: StoredTokens): Credentials {
   return credentials;
 }
 
-async function waitForAuthorizationCode(
-  server: http.Server,
-  timeoutMs: number,
-): Promise<string> {
+async function waitForAuthorizationCode(server: http.Server, timeoutMs: number): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new CliError("Timed out waiting for the OAuth callback."));
@@ -199,9 +191,7 @@ export function createAuthorizedClient(
   return authClient;
 }
 
-export async function refreshSessionIfNeeded(
-  authClient: OAuth2Client,
-): Promise<void> {
+export async function refreshSessionIfNeeded(authClient: OAuth2Client): Promise<void> {
   try {
     await authClient.getAccessToken();
   } catch (error) {

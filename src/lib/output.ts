@@ -10,23 +10,16 @@ function truncate(value: string, width: number): string {
 
 function renderTable(headers: string[], rows: string[][]): string {
   const widths = headers.map((header, index) =>
-    Math.max(
-      header.length,
-      ...rows.map((row) => (row[index] ? row[index]!.length : 0)),
-    ),
+    Math.max(header.length, ...rows.map((row) => (row[index] ? row[index]!.length : 0))),
   );
 
   const lines = [
-    headers
-      .map((header, index) => header.padEnd(widths[index]!))
-      .join("  "),
+    headers.map((header, index) => header.padEnd(widths[index]!)).join("  "),
     widths.map((width) => "-".repeat(width)).join("  "),
   ];
 
   for (const row of rows) {
-    lines.push(
-      row.map((cell, index) => cell.padEnd(widths[index]!)).join("  "),
-    );
+    lines.push(row.map((cell, index) => cell.padEnd(widths[index]!)).join("  "));
   }
 
   return lines.join("\n");

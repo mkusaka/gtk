@@ -2,11 +2,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  getClientsStorePath,
-  getConfigDir,
-  getSessionsStorePath,
-} from "../src/lib/paths.js";
+import { getClientsStorePath, getConfigDir, getSessionsStorePath } from "../src/lib/paths.js";
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -12,9 +12,7 @@ import {
 import { CliError } from "./lib/errors.js";
 import { printJson, printTaskLists, printTasks } from "./lib/output.js";
 import { getConfigDir, getClientsStorePath, getSessionsStorePath } from "./lib/paths.js";
-import {
-  parseGoogleCredentialsFile,
-} from "./lib/google-credentials.js";
+import { parseGoogleCredentialsFile } from "./lib/google-credentials.js";
 import {
   deleteTask,
   getTask,
@@ -73,7 +71,10 @@ function withTaskOptions(command: Command): Command {
 
 async function withAuthorizedSession<T>(
   selection: AuthSelection,
-  callback: (input: { authClient: ReturnType<typeof createAuthorizedClient>; session: StoredSession }) => Promise<T>,
+  callback: (input: {
+    authClient: ReturnType<typeof createAuthorizedClient>;
+    session: StoredSession;
+  }) => Promise<T>,
 ): Promise<T> {
   const clientsStore = await loadClientsStore();
   const sessionsStore = await loadSessionsStore();
@@ -110,7 +111,9 @@ program
   .version("0.1.0");
 
 const auth = program.command("auth").description("Manage OAuth clients and sessions");
-const credentials = auth.command("credentials").description("Manage saved OAuth client definitions");
+const credentials = auth
+  .command("credentials")
+  .description("Manage saved OAuth client definitions");
 
 credentials
   .command("add <path>")
@@ -127,8 +130,7 @@ credentials
         ...store.clients,
         [name]: client,
       },
-      defaultClient:
-        options.default || !store.defaultClient ? name : store.defaultClient,
+      defaultClient: options.default || !store.defaultClient ? name : store.defaultClient,
     };
     await saveClientsStore(nextStore);
     printCreatedConfigPaths();
@@ -136,10 +138,7 @@ credentials
   });
 
 withAuthOptions(
-  credentials
-    .command("ls")
-    .alias("list")
-    .description("List saved OAuth clients"),
+  credentials.command("ls").alias("list").description("List saved OAuth clients"),
 ).action(async (options: AuthSelection) => {
   const store = await loadClientsStore();
   const clients = Object.values(store.clients).sort((left, right) =>
@@ -203,73 +202,71 @@ withAuthOptions(
   console.log(`Saved session for ${loginResult.email} on client "${clientName}".`);
 });
 
-withAuthOptions(
-  auth.command("status").description("Show the current saved session state"),
-).action(async (options: AuthSelection) => {
-  const clientsStore = await loadClientsStore();
-  const sessionsStore = await loadSessionsStore();
-  const client = resolveClient(clientsStore, options.client);
-  const session = resolveSession(sessionsStore, client.name, options.account);
+withAuthOptions(auth.command("status").description("Show the current saved session state")).action(
+  async (options: AuthSelection) => {
+    const clientsStore = await loadClientsStore();
+    const sessionsStore = await loadSessionsStore();
+    const client = resolveClient(clientsStore, options.client);
+    const session = resolveSession(sessionsStore, client.name, options.account);
 
-  const authClient = createAuthorizedClient(client, session, async (tokens) => {
-    const nextStore = await updateSessionTokens(sessionsStore, session, tokens);
+    const authClient = createAuthorizedClient(client, session, async (tokens) => {
+      const nextStore = await updateSessionTokens(sessionsStore, session, tokens);
+      await saveSessionsStore(nextStore);
+    });
+    await refreshSessionIfNeeded(authClient);
+
+    const payload = {
+      client: client.name,
+      projectId: client.projectId ?? null,
+      email: session.email,
+      hasRefreshToken: Boolean(session.tokens.refresh_token),
+      scopes: session.scopes,
+      tasksScopeGranted: session.scopes.includes(TASKS_SCOPE),
+      updatedAt: session.updatedAt,
+    };
+    if (options.json) {
+      printJson(payload);
+      return;
+    }
+    console.log(`client: ${payload.client}`);
+    console.log(`project: ${payload.projectId ?? "-"}`);
+    console.log(`email: ${payload.email}`);
+    console.log(`has refresh token: ${payload.hasRefreshToken ? "yes" : "no"}`);
+    console.log(`tasks scope granted: ${payload.tasksScopeGranted ? "yes" : "no"}`);
+    console.log(`updated: ${payload.updatedAt}`);
+  },
+);
+
+withAuthOptions(auth.command("logout").description("Remove a saved Google account session")).action(
+  async (options: AuthSelection) => {
+    const clientsStore = await loadClientsStore();
+    const sessionsStore = await loadSessionsStore();
+    const clientName = resolveClientName(clientsStore, options.client);
+    const session = resolveSession(sessionsStore, clientName, options.account);
+    const nextStore = removeSession(sessionsStore, clientName, session.email);
     await saveSessionsStore(nextStore);
-  });
-  await refreshSessionIfNeeded(authClient);
-
-  const payload = {
-    client: client.name,
-    projectId: client.projectId ?? null,
-    email: session.email,
-    hasRefreshToken: Boolean(session.tokens.refresh_token),
-    scopes: session.scopes,
-    tasksScopeGranted: session.scopes.includes(TASKS_SCOPE),
-    updatedAt: session.updatedAt,
-  };
-  if (options.json) {
-    printJson(payload);
-    return;
-  }
-  console.log(`client: ${payload.client}`);
-  console.log(`project: ${payload.projectId ?? "-"}`);
-  console.log(`email: ${payload.email}`);
-  console.log(`has refresh token: ${payload.hasRefreshToken ? "yes" : "no"}`);
-  console.log(`tasks scope granted: ${payload.tasksScopeGranted ? "yes" : "no"}`);
-  console.log(`updated: ${payload.updatedAt}`);
-});
-
-withAuthOptions(
-  auth.command("logout").description("Remove a saved Google account session"),
-).action(async (options: AuthSelection) => {
-  const clientsStore = await loadClientsStore();
-  const sessionsStore = await loadSessionsStore();
-  const clientName = resolveClientName(clientsStore, options.client);
-  const session = resolveSession(sessionsStore, clientName, options.account);
-  const nextStore = removeSession(sessionsStore, clientName, session.email);
-  await saveSessionsStore(nextStore);
-  console.log(`Removed saved session for ${session.email} on client "${clientName}".`);
-});
+    console.log(`Removed saved session for ${session.email} on client "${clientName}".`);
+  },
+);
 
 const lists = program.command("lists").description("Manage Google task lists");
 
-withAuthOptions(
-  lists.command("ls").alias("list").description("List task lists"),
-).action(async (options: AuthSelection) => {
-  await withAuthorizedSession(options, async ({ authClient }) => {
-    const taskLists = await listTaskLists(authClient);
-    if (options.json) {
-      printJson(taskLists);
-      return;
-    }
-    printTaskLists(taskLists);
-  });
-});
+withAuthOptions(lists.command("ls").alias("list").description("List task lists")).action(
+  async (options: AuthSelection) => {
+    await withAuthorizedSession(options, async ({ authClient }) => {
+      const taskLists = await listTaskLists(authClient);
+      if (options.json) {
+        printJson(taskLists);
+        return;
+      }
+      printTaskLists(taskLists);
+    });
+  },
+);
 
 const tasks = program.command("tasks").description("Manage Google Tasks");
 
-withTaskOptions(
-  tasks.command("ls").alias("list").description("List tasks in a task list"),
-)
+withTaskOptions(tasks.command("ls").alias("list").description("List tasks in a task list"))
   .addOption(new Option("--show-completed", "include completed tasks"))
   .option("--due-after <date-or-rfc3339>", "minimum due date")
   .option("--due-before <date-or-rfc3339>", "maximum due date")
@@ -309,9 +306,7 @@ withTaskOptions(
     });
   });
 
-withTaskOptions(
-  tasks.command("add").description("Create a task"),
-)
+withTaskOptions(tasks.command("add").description("Create a task"))
   .requiredOption("--title <text>", "task title")
   .option("--notes <text>", "task notes")
   .option("--due <date-or-rfc3339>", "task due date")
@@ -341,9 +336,7 @@ withTaskOptions(
     });
   });
 
-withTaskOptions(
-  tasks.command("update <taskId>").description("Update a task"),
-)
+withTaskOptions(tasks.command("update <taskId>").description("Update a task"))
   .option("--title <text>", "new task title")
   .option("--notes <text>", "new task notes")
   .option("--due <date-or-rfc3339>", "new due date")
@@ -383,53 +376,53 @@ withTaskOptions(
     });
   });
 
-withTaskOptions(
-  tasks.command("done <taskId>").description("Mark a task completed"),
-).action(async (taskId: string, options: TaskCommandOptions) => {
-  await withAuthorizedSession(options, async ({ authClient }) => {
-    const taskList = await resolveTaskList(authClient, options.list);
-    const task = await completeTask(authClient, taskList.id, taskId);
-    if (options.json) {
-      printJson(task);
-      return;
-    }
-    console.log(`Completed task ${task.id} in ${taskList.title}.`);
-    printTasks([task]);
-  });
-});
+withTaskOptions(tasks.command("done <taskId>").description("Mark a task completed")).action(
+  async (taskId: string, options: TaskCommandOptions) => {
+    await withAuthorizedSession(options, async ({ authClient }) => {
+      const taskList = await resolveTaskList(authClient, options.list);
+      const task = await completeTask(authClient, taskList.id, taskId);
+      if (options.json) {
+        printJson(task);
+        return;
+      }
+      console.log(`Completed task ${task.id} in ${taskList.title}.`);
+      printTasks([task]);
+    });
+  },
+);
 
-withTaskOptions(
-  tasks.command("reopen <taskId>").description("Reopen a completed task"),
-).action(async (taskId: string, options: TaskCommandOptions) => {
-  await withAuthorizedSession(options, async ({ authClient }) => {
-    const taskList = await resolveTaskList(authClient, options.list);
-    const task = await reopenTask(authClient, taskList.id, taskId);
-    if (options.json) {
-      printJson(task);
-      return;
-    }
-    console.log(`Reopened task ${task.id} in ${taskList.title}.`);
-    printTasks([task]);
-  });
-});
+withTaskOptions(tasks.command("reopen <taskId>").description("Reopen a completed task")).action(
+  async (taskId: string, options: TaskCommandOptions) => {
+    await withAuthorizedSession(options, async ({ authClient }) => {
+      const taskList = await resolveTaskList(authClient, options.list);
+      const task = await reopenTask(authClient, taskList.id, taskId);
+      if (options.json) {
+        printJson(task);
+        return;
+      }
+      console.log(`Reopened task ${task.id} in ${taskList.title}.`);
+      printTasks([task]);
+    });
+  },
+);
 
-withTaskOptions(
-  tasks.command("delete <taskId>").description("Delete a task"),
-).action(async (taskId: string, options: TaskCommandOptions) => {
-  await withAuthorizedSession(options, async ({ authClient }) => {
-    const taskList = await resolveTaskList(authClient, options.list);
-    await deleteTask(authClient, taskList.id, taskId);
-    if (options.json) {
-      printJson({
-        deleted: true,
-        taskId,
-        listId: taskList.id,
-      });
-      return;
-    }
-    console.log(`Deleted task ${taskId} from ${taskList.title}.`);
-  });
-});
+withTaskOptions(tasks.command("delete <taskId>").description("Delete a task")).action(
+  async (taskId: string, options: TaskCommandOptions) => {
+    await withAuthorizedSession(options, async ({ authClient }) => {
+      const taskList = await resolveTaskList(authClient, options.list);
+      await deleteTask(authClient, taskList.id, taskId);
+      if (options.json) {
+        printJson({
+          deleted: true,
+          taskId,
+          listId: taskList.id,
+        });
+        return;
+      }
+      console.log(`Deleted task ${taskId} from ${taskList.title}.`);
+    });
+  },
+);
 
 withTaskOptions(
   tasks.command("move <taskId>").description("Reorder a task relative to another task"),
@@ -459,19 +452,19 @@ withTaskOptions(
     });
   });
 
-withTaskOptions(
-  tasks.command("get <taskId>").description("Fetch a single task"),
-).action(async (taskId: string, options: TaskCommandOptions) => {
-  await withAuthorizedSession(options, async ({ authClient }) => {
-    const taskList = await resolveTaskList(authClient, options.list);
-    const task = await getTask(authClient, taskList.id, taskId);
-    if (options.json) {
-      printJson(task);
-      return;
-    }
-    printTasks([task]);
-  });
-});
+withTaskOptions(tasks.command("get <taskId>").description("Fetch a single task")).action(
+  async (taskId: string, options: TaskCommandOptions) => {
+    await withAuthorizedSession(options, async ({ authClient }) => {
+      const taskList = await resolveTaskList(authClient, options.list);
+      const task = await getTask(authClient, taskList.id, taskId);
+      if (options.json) {
+        printJson(task);
+        return;
+      }
+      printTasks([task]);
+    });
+  },
+);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof CliError) {

@@ -5,15 +5,7 @@ function parseDateInput(value: string): Date {
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
   if (dateOnly) {
     const [, year, month, day] = dateOnly;
-    return new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      0,
-      0,
-      0,
-      0,
-    );
+    return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
   }
 
   const parsed = new Date(raw);
