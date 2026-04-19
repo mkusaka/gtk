@@ -2,42 +2,7 @@
 
 import { Command, Option } from "commander";
 
-import {
-  createAuthorizedClient,
-  refreshSessionIfNeeded,
-  runInteractiveLogin,
-  TASKS_SCOPE,
-  updateSessionTokens,
-} from "./lib/auth.js";
 import { CliError } from "./lib/errors.js";
-import { printJson, printTaskLists, printTasks } from "./lib/output.js";
-import { getConfigDir, getClientsStorePath, getSessionsStorePath } from "./lib/paths.js";
-import { parseGoogleCredentialsFile } from "./lib/google-credentials.js";
-import {
-  deleteTask,
-  getTask,
-  listTaskLists,
-  listTasks,
-  moveTask,
-  resolveTaskList,
-  createTask,
-  reopenTask,
-  updateTask,
-  completeTask,
-} from "./lib/tasks.js";
-import { parseDueFilter, parseDueInput } from "./lib/time.js";
-import {
-  loadClientsStore,
-  loadSessionsStore,
-  normalizeClientName,
-  removeSession,
-  resolveClient,
-  resolveClientName,
-  resolveSession,
-  saveClientsStore,
-  saveSessionsStore,
-  sessionKey,
-} from "./lib/store.js";
 import type { AuthSelection, StoredSession } from "./lib/types.js";
 
 interface TaskCommandOptions extends AuthSelection {
@@ -52,6 +17,40 @@ interface TaskCommandOptions extends AuthSelection {
   clearDue?: boolean;
   before?: string;
   after?: string;
+}
+
+interface RuntimeModules {
+  auth: typeof import("./lib/auth.js");
+  credentials: typeof import("./lib/google-credentials.js");
+  output: typeof import("./lib/output.js");
+  paths: typeof import("./lib/paths.js");
+  store: typeof import("./lib/store.js");
+  tasks: typeof import("./lib/tasks.js");
+  time: typeof import("./lib/time.js");
+}
+
+let runtimePromise: Promise<RuntimeModules> | undefined;
+
+async function loadRuntime(): Promise<RuntimeModules> {
+  runtimePromise ??= Promise.all([
+    import("./lib/auth.js"),
+    import("./lib/google-credentials.js"),
+    import("./lib/output.js"),
+    import("./lib/paths.js"),
+    import("./lib/store.js"),
+    import("./lib/tasks.js"),
+    import("./lib/time.js"),
+  ]).then(([auth, credentials, output, paths, store, tasks, time]) => ({
+    auth,
+    credentials,
+    output,
+    paths,
+    store,
+    tasks,
+    time,
+  }));
+
+  return runtimePromise;
 }
 
 function withAuthOptions(command: Command): Command {
@@ -72,21 +71,23 @@ function withTaskOptions(command: Command): Command {
 async function withAuthorizedSession<T>(
   selection: AuthSelection,
   callback: (input: {
-    authClient: ReturnType<typeof createAuthorizedClient>;
+    authClient: ReturnType<RuntimeModules["auth"]["createAuthorizedClient"]>;
     session: StoredSession;
+    runtime: RuntimeModules;
   }) => Promise<T>,
 ): Promise<T> {
-  const clientsStore = await loadClientsStore();
-  const sessionsStore = await loadSessionsStore();
-  const client = resolveClient(clientsStore, selection.client);
-  const session = resolveSession(sessionsStore, client.name, selection.account);
+  const runtime = await loadRuntime();
+  const clientsStore = await runtime.store.loadClientsStore();
+  const sessionsStore = await runtime.store.loadSessionsStore();
+  const client = runtime.store.resolveClient(clientsStore, selection.client);
+  const session = runtime.store.resolveSession(sessionsStore, client.name, selection.account);
 
-  const authClient = createAuthorizedClient(client, session, async (tokens) => {
-    const nextStore = await updateSessionTokens(sessionsStore, session, tokens);
-    await saveSessionsStore(nextStore);
+  const authClient = runtime.auth.createAuthorizedClient(client, session, async (tokens) => {
+    const nextStore = await runtime.auth.updateSessionTokens(sessionsStore, session, tokens);
+    await runtime.store.saveSessionsStore(nextStore);
   });
-  await refreshSessionIfNeeded(authClient);
-  return callback({ authClient, session });
+  await runtime.auth.refreshSessionIfNeeded(authClient);
+  return callback({ authClient, session, runtime });
 }
 
 function requireNonEmpty(value: string | undefined, message: string): string {
@@ -96,10 +97,10 @@ function requireNonEmpty(value: string | undefined, message: string): string {
   return value.trim();
 }
 
-function printCreatedConfigPaths(): void {
-  console.error(`Config directory: ${getConfigDir()}`);
-  console.error(`Clients store: ${getClientsStorePath()}`);
-  console.error(`Sessions store: ${getSessionsStorePath()}`);
+function printCreatedConfigPaths(runtime: RuntimeModules): void {
+  console.error(`Config directory: ${runtime.paths.getConfigDir()}`);
+  console.error(`Clients store: ${runtime.paths.getClientsStorePath()}`);
+  console.error(`Sessions store: ${runtime.paths.getSessionsStorePath()}`);
 }
 
 const program = new Command();
@@ -121,9 +122,10 @@ credentials
   .option("--name <name>", "client name", "default")
   .option("--default", "set as the default client")
   .action(async (filePath: string, options: { name: string; default?: boolean }) => {
-    const store = await loadClientsStore();
-    const name = normalizeClientName(options.name);
-    const client = await parseGoogleCredentialsFile(filePath, name);
+    const runtime = await loadRuntime();
+    const store = await runtime.store.loadClientsStore();
+    const name = runtime.store.normalizeClientName(options.name);
+    const client = await runtime.credentials.parseGoogleCredentialsFile(filePath, name);
     const nextStore = {
       ...store,
       clients: {
@@ -132,15 +134,16 @@ credentials
       },
       defaultClient: options.default || !store.defaultClient ? name : store.defaultClient,
     };
-    await saveClientsStore(nextStore);
-    printCreatedConfigPaths();
+    await runtime.store.saveClientsStore(nextStore);
+    printCreatedConfigPaths(runtime);
     console.log(`Saved OAuth client "${name}".`);
   });
 
 withAuthOptions(
   credentials.command("ls").alias("list").description("List saved OAuth clients"),
 ).action(async (options: AuthSelection) => {
-  const store = await loadClientsStore();
+  const runtime = await loadRuntime();
+  const store = await runtime.store.loadClientsStore();
   const clients = Object.values(store.clients).sort((left, right) =>
     left.name.localeCompare(right.name),
   );
@@ -152,7 +155,7 @@ withAuthOptions(
     createdAt: client.createdAt,
   }));
   if (options.json) {
-    printJson(payload);
+    runtime.output.printJson(payload);
     return;
   }
   if (payload.length === 0) {
@@ -171,12 +174,13 @@ withAuthOptions(
 withAuthOptions(
   auth.command("login [email]").description("Authenticate a Google account for a saved client"),
 ).action(async (email: string | undefined, options: AuthSelection) => {
-  const clientsStore = await loadClientsStore();
-  const sessionsStore = await loadSessionsStore();
-  const clientName = resolveClientName(clientsStore, options.client);
+  const runtime = await loadRuntime();
+  const clientsStore = await runtime.store.loadClientsStore();
+  const sessionsStore = await runtime.store.loadSessionsStore();
+  const clientName = runtime.store.resolveClientName(clientsStore, options.client);
   const client = clientsStore.clients[clientName]!;
-  const loginResult = await runInteractiveLogin(client, email);
-  const key = sessionKey(clientName, loginResult.email);
+  const loginResult = await runtime.auth.runInteractiveLogin(client, email);
+  const key = runtime.store.sessionKey(clientName, loginResult.email);
   const nextSessionsStore = {
     ...sessionsStore,
     defaultAccountByClient: {
@@ -194,7 +198,7 @@ withAuthOptions(
       },
     },
   };
-  await saveSessionsStore(nextSessionsStore);
+  await runtime.store.saveSessionsStore(nextSessionsStore);
   if (email && email.trim().toLowerCase() !== loginResult.email) {
     console.error(`Requested login hint: ${email}`);
     console.error(`Authorized account: ${loginResult.email}`);
@@ -204,16 +208,17 @@ withAuthOptions(
 
 withAuthOptions(auth.command("status").description("Show the current saved session state")).action(
   async (options: AuthSelection) => {
-    const clientsStore = await loadClientsStore();
-    const sessionsStore = await loadSessionsStore();
-    const client = resolveClient(clientsStore, options.client);
-    const session = resolveSession(sessionsStore, client.name, options.account);
+    const runtime = await loadRuntime();
+    const clientsStore = await runtime.store.loadClientsStore();
+    const sessionsStore = await runtime.store.loadSessionsStore();
+    const client = runtime.store.resolveClient(clientsStore, options.client);
+    const session = runtime.store.resolveSession(sessionsStore, client.name, options.account);
 
-    const authClient = createAuthorizedClient(client, session, async (tokens) => {
-      const nextStore = await updateSessionTokens(sessionsStore, session, tokens);
-      await saveSessionsStore(nextStore);
+    const authClient = runtime.auth.createAuthorizedClient(client, session, async (tokens) => {
+      const nextStore = await runtime.auth.updateSessionTokens(sessionsStore, session, tokens);
+      await runtime.store.saveSessionsStore(nextStore);
     });
-    await refreshSessionIfNeeded(authClient);
+    await runtime.auth.refreshSessionIfNeeded(authClient);
 
     const payload = {
       client: client.name,
@@ -221,11 +226,11 @@ withAuthOptions(auth.command("status").description("Show the current saved sessi
       email: session.email,
       hasRefreshToken: Boolean(session.tokens.refresh_token),
       scopes: session.scopes,
-      tasksScopeGranted: session.scopes.includes(TASKS_SCOPE),
+      tasksScopeGranted: session.scopes.includes(runtime.auth.TASKS_SCOPE),
       updatedAt: session.updatedAt,
     };
     if (options.json) {
-      printJson(payload);
+      runtime.output.printJson(payload);
       return;
     }
     console.log(`client: ${payload.client}`);
@@ -239,12 +244,13 @@ withAuthOptions(auth.command("status").description("Show the current saved sessi
 
 withAuthOptions(auth.command("logout").description("Remove a saved Google account session")).action(
   async (options: AuthSelection) => {
-    const clientsStore = await loadClientsStore();
-    const sessionsStore = await loadSessionsStore();
-    const clientName = resolveClientName(clientsStore, options.client);
-    const session = resolveSession(sessionsStore, clientName, options.account);
-    const nextStore = removeSession(sessionsStore, clientName, session.email);
-    await saveSessionsStore(nextStore);
+    const runtime = await loadRuntime();
+    const clientsStore = await runtime.store.loadClientsStore();
+    const sessionsStore = await runtime.store.loadSessionsStore();
+    const clientName = runtime.store.resolveClientName(clientsStore, options.client);
+    const session = runtime.store.resolveSession(sessionsStore, clientName, options.account);
+    const nextStore = runtime.store.removeSession(sessionsStore, clientName, session.email);
+    await runtime.store.saveSessionsStore(nextStore);
     console.log(`Removed saved session for ${session.email} on client "${clientName}".`);
   },
 );
@@ -253,13 +259,13 @@ const lists = program.command("lists").description("Manage Google task lists");
 
 withAuthOptions(lists.command("ls").alias("list").description("List task lists")).action(
   async (options: AuthSelection) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskLists = await listTaskLists(authClient);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskLists = await runtime.tasks.listTaskLists(authClient);
       if (options.json) {
-        printJson(taskLists);
+        runtime.output.printJson(taskLists);
         return;
       }
-      printTaskLists(taskLists);
+      runtime.output.printTaskLists(taskLists);
     });
   },
 );
@@ -272,8 +278,8 @@ withTaskOptions(tasks.command("ls").alias("list").description("List tasks in a t
   .option("--due-before <date-or-rfc3339>", "maximum due date")
   .option("--limit <count>", "maximum number of tasks to return", "100")
   .action(async (options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
       const listOptions: {
         listId: string;
         showCompleted?: boolean;
@@ -288,21 +294,21 @@ withTaskOptions(tasks.command("ls").alias("list").description("List tasks in a t
         listOptions.showCompleted = true;
       }
       if (options.dueAfter) {
-        listOptions.dueMin = parseDueFilter(options.dueAfter, "min");
+        listOptions.dueMin = runtime.time.parseDueFilter(options.dueAfter, "min");
       }
       if (options.dueBefore) {
-        listOptions.dueMax = parseDueFilter(options.dueBefore, "max");
+        listOptions.dueMax = runtime.time.parseDueFilter(options.dueBefore, "max");
       }
-      const taskItems = await listTasks(authClient, listOptions);
+      const taskItems = await runtime.tasks.listTasks(authClient, listOptions);
       if (options.json) {
-        printJson({
+        runtime.output.printJson({
           list: taskList,
           items: taskItems,
         });
         return;
       }
       console.log(`Task list: ${taskList.title} (${taskList.id})`);
-      printTasks(taskItems);
+      runtime.output.printTasks(taskItems);
     });
   });
 
@@ -311,8 +317,8 @@ withTaskOptions(tasks.command("add").description("Create a task"))
   .option("--notes <text>", "task notes")
   .option("--due <date-or-rfc3339>", "task due date")
   .action(async (options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
       const createInput: {
         title: string;
         notes?: string;
@@ -324,15 +330,15 @@ withTaskOptions(tasks.command("add").description("Create a task"))
         createInput.notes = options.notes;
       }
       if (options.due) {
-        createInput.due = parseDueInput(options.due);
+        createInput.due = runtime.time.parseDueInput(options.due);
       }
-      const task = await createTask(authClient, taskList.id, createInput);
+      const task = await runtime.tasks.createTask(authClient, taskList.id, createInput);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
       console.log(`Created task ${task.id} in ${taskList.title}.`);
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   });
 
@@ -348,8 +354,8 @@ withTaskOptions(tasks.command("update <taskId>").description("Update a task"))
     if (options.due && options.clearDue) {
       throw new CliError('Pass only one of "--due" or "--clear-due".');
     }
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
       const updateInput: {
         title?: string;
         notes?: string;
@@ -364,55 +370,55 @@ withTaskOptions(tasks.command("update <taskId>").description("Update a task"))
       if (options.clearDue) {
         updateInput.due = null;
       } else if (options.due) {
-        updateInput.due = parseDueInput(options.due);
+        updateInput.due = runtime.time.parseDueInput(options.due);
       }
-      const task = await updateTask(authClient, taskList.id, taskId, updateInput);
+      const task = await runtime.tasks.updateTask(authClient, taskList.id, taskId, updateInput);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
       console.log(`Updated task ${task.id} in ${taskList.title}.`);
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   });
 
 withTaskOptions(tasks.command("done <taskId>").description("Mark a task completed")).action(
   async (taskId: string, options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
-      const task = await completeTask(authClient, taskList.id, taskId);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
+      const task = await runtime.tasks.completeTask(authClient, taskList.id, taskId);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
       console.log(`Completed task ${task.id} in ${taskList.title}.`);
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   },
 );
 
 withTaskOptions(tasks.command("reopen <taskId>").description("Reopen a completed task")).action(
   async (taskId: string, options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
-      const task = await reopenTask(authClient, taskList.id, taskId);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
+      const task = await runtime.tasks.reopenTask(authClient, taskList.id, taskId);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
       console.log(`Reopened task ${task.id} in ${taskList.title}.`);
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   },
 );
 
 withTaskOptions(tasks.command("delete <taskId>").description("Delete a task")).action(
   async (taskId: string, options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
-      await deleteTask(authClient, taskList.id, taskId);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
+      await runtime.tasks.deleteTask(authClient, taskList.id, taskId);
       if (options.json) {
-        printJson({
+        runtime.output.printJson({
           deleted: true,
           taskId,
           listId: taskList.id,
@@ -430,8 +436,8 @@ withTaskOptions(
   .option("--before <task-id>", "move before the given task")
   .option("--after <task-id>", "move after the given task")
   .action(async (taskId: string, options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
       const moveInput: {
         before?: string;
         after?: string;
@@ -442,26 +448,26 @@ withTaskOptions(
       if (options.after) {
         moveInput.after = options.after;
       }
-      const task = await moveTask(authClient, taskList.id, taskId, moveInput);
+      const task = await runtime.tasks.moveTask(authClient, taskList.id, taskId, moveInput);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
       console.log(`Moved task ${task.id} in ${taskList.title}.`);
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   });
 
 withTaskOptions(tasks.command("get <taskId>").description("Fetch a single task")).action(
   async (taskId: string, options: TaskCommandOptions) => {
-    await withAuthorizedSession(options, async ({ authClient }) => {
-      const taskList = await resolveTaskList(authClient, options.list);
-      const task = await getTask(authClient, taskList.id, taskId);
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.resolveTaskList(authClient, options.list);
+      const task = await runtime.tasks.getTask(authClient, taskList.id, taskId);
       if (options.json) {
-        printJson(task);
+        runtime.output.printJson(task);
         return;
       }
-      printTasks([task]);
+      runtime.output.printTasks([task]);
     });
   },
 );

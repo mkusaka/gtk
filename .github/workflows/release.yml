@@ -154,6 +154,7 @@ jobs:
           rm -rf release-root
           mkdir -p release-root/skills
           bun build --compile --target="$TARGET" src/index.ts --outfile gtk
+          ./gtk --help >/dev/null
           cp gtk release-root/gtk
           cp -R skills/gtk-google-tasks release-root/skills/
 
