@@ -270,6 +270,21 @@ withAuthOptions(lists.command("ls").alias("list").description("List task lists")
   },
 );
 
+withAuthOptions(lists.command("create").description("Create a task list"))
+  .requiredOption("--title <text>", "task list title")
+  .action(async (options: AuthSelection & { title?: string }) => {
+    await withAuthorizedSession(options, async ({ authClient, runtime }) => {
+      const taskList = await runtime.tasks.createTaskList(authClient, {
+        title: requireNonEmpty(options.title, "Pass --title <text>."),
+      });
+      if (options.json) {
+        runtime.output.printJson(taskList);
+        return;
+      }
+      console.log(`Created task list ${taskList.title} (${taskList.id}).`);
+    });
+  });
+
 const tasks = program.command("tasks").description("Manage Google Tasks");
 
 withTaskOptions(tasks.command("ls").alias("list").description("List tasks in a task list"))

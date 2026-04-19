@@ -72,6 +72,7 @@ Inspect task lists:
 ```bash
 gtk lists ls
 gtk lists ls --json
+gtk lists create --title "gtk-test"
 ```
 
 Work with tasks:

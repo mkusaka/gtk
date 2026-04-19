@@ -78,6 +78,19 @@ export async function listTaskLists(auth: OAuth2Client): Promise<TaskListSummary
   return items;
 }
 
+export async function createTaskList(
+  auth: OAuth2Client,
+  input: { title: string },
+): Promise<TaskListSummary> {
+  const api = getTasksApi(auth);
+  const response = await api.tasklists.insert({
+    requestBody: {
+      title: input.title,
+    },
+  });
+  return toTaskListSummary(response.data);
+}
+
 export async function resolveTaskList(
   auth: OAuth2Client,
   identifier = "@default",

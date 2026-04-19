@@ -31,11 +31,12 @@ gtk auth logout --client default --account you@example.com
 ```bash
 gtk lists ls
 gtk lists ls --client default --account you@example.com --json
+gtk lists create --title "gtk-test"
 ```
 
 Notes:
 
-- `gtk` does not yet create or delete task lists.
+- `gtk` can create task lists, but it does not yet delete them.
 - `@default` is the default list target for task commands.
 
 ## Tasks

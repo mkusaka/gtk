@@ -1,6 +1,6 @@
 ---
 name: gtk-google-tasks
-description: "Use when an agent needs to operate Google Tasks through the `gtk` CLI: register BYO Google Desktop OAuth credentials, authenticate a saved Google account, inspect task lists, and create, update, complete, reopen, move, or delete tasks. Trigger this skill when `gtk auth`, `gtk lists`, and `gtk tasks` should be used instead of direct Google API calls."
+description: "Use when an agent needs to operate Google Tasks through the `gtk` CLI: register BYO Google Desktop OAuth credentials, authenticate a saved Google account, inspect or create task lists, and create, update, complete, reopen, move, or delete tasks. Trigger this skill when `gtk auth`, `gtk lists`, and `gtk tasks` should be used instead of direct Google API calls."
 ---
 
 # GTK Google Tasks
@@ -65,6 +65,7 @@ gtk auth status --client default
 ```bash
 gtk lists ls
 gtk lists ls --json
+gtk lists create --title "gtk-test"
 ```
 
 ### Inspect tasks
