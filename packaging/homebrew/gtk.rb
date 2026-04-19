@@ -17,14 +17,18 @@ class Gtk < Formula
   head "https://github.com/mkusaka/gtk.git", branch: "main"
 
   head do
-    depends_on "bun" => :build
+    depends_on "deno" => :build
+    depends_on "node" => :build
+    depends_on "pnpm" => :build
   end
 
   def install
     if build.head?
-      target = Hardware::CPU.arm? ? "bun-darwin-arm64" : "bun-darwin-x64"
-      system "bun", "install"
-      system "bun", "build", "--compile", "--target=#{target}", "src/index.ts", "--outfile", "gtk"
+      target = Hardware::CPU.arm? ? "aarch64-apple-darwin" : "x86_64-apple-darwin"
+      system "pnpm", "install", "--frozen-lockfile"
+      system "pnpm", "build"
+      system "pnpm", "prune", "--prod"
+      system "deno", "compile", "--no-lock", "-A", "--node-modules-dir=auto", "--target=#{target}", "--output", "gtk", "dist/index.js"
     end
 
     bin.install "gtk"

@@ -3,7 +3,6 @@ import { URL } from "node:url";
 
 import { OAuth2Client, type Credentials } from "google-auth-library";
 import { google } from "googleapis";
-import open from "open";
 
 import { CliError } from "./errors.js";
 import { mergeTokens } from "./store.js";
@@ -112,6 +111,7 @@ async function waitForAuthorizationCode(server: http.Server, timeoutMs: number):
 
 async function openBrowser(url: string): Promise<void> {
   try {
+    const { default: open } = await import("open");
     await open(url);
   } catch {
     // Fall back to printing the URL; the caller already prints it.

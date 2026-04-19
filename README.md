@@ -128,13 +128,13 @@ pnpm format:check
 pnpm lint
 pnpm test
 pnpm build
-bun build --compile src/index.ts --outfile dist/gtk
+pnpm compile:binary
 ```
 
 ## Release
 
 Pushing a `v*` tag runs the release workflow. It verifies the project, builds
-Apple Silicon and Intel macOS single-file binaries with Bun, uploads tarballs
+Apple Silicon and Intel macOS single-file binaries with Deno, uploads tarballs
 to the GitHub release, and dispatches a formula update to
 `mkusaka/homebrew-tap`.
 

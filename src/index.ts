@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import process from "node:process";
 import { Command, Option } from "commander";
 
 import { CliError } from "./lib/errors.js";

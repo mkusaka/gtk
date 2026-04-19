@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist coverage",
-    "compile:binary": "bun build --compile src/index.ts --outfile dist/gtk",
+    "compile:binary": "pnpm build && deno compile --no-lock -A --node-modules-dir=auto --output dist/gtk dist/index.js",
     "dev": "tsx src/index.ts",
     "format": "oxfmt --write src test vitest.config.ts",
     "format:check": "oxfmt --check src test vitest.config.ts",
