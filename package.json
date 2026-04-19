@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist coverage",
+    "compile:binary": "bun build --compile src/index.ts --outfile dist/gtk",
     "dev": "tsx src/index.ts",
     "format": "oxfmt --write src test vitest.config.ts",
     "format:check": "oxfmt --check src test vitest.config.ts",

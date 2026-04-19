@@ -21,6 +21,19 @@ pnpm exec tsx src/index.ts --help
 node dist/index.js --help
 ```
 
+Install from Homebrew after the first tagged release:
+
+```bash
+brew tap mkusaka/tap
+brew install mkusaka/tap/gtk
+```
+
+Until the first tagged release is published, install from `HEAD`:
+
+```bash
+brew install --HEAD mkusaka/tap/gtk
+```
+
 ## BYO Credentials
 
 1. Create or choose a Google Cloud project.
@@ -114,4 +127,14 @@ pnpm format:check
 pnpm lint
 pnpm test
 pnpm build
+bun build --compile src/index.ts --outfile dist/gtk
 ```
+
+## Release
+
+Pushing a `v*` tag runs the release workflow. It verifies the project, builds
+Apple Silicon and Intel macOS single-file binaries with Bun, uploads tarballs
+to the GitHub release, and dispatches a formula update to
+`mkusaka/homebrew-tap`.
+
+The workflow requires the `HOMEBREW_TAP_TOKEN` repository secret.
