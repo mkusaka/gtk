@@ -1,0 +1,4 @@
+interface:
+  display_name: "GTK Google Tasks"
+  short_description: "Use gtk for BYO Google Tasks operations"
+  default_prompt: "Use $gtk-google-tasks to operate Google Tasks through the gtk CLI."

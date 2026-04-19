@@ -1,0 +1,96 @@
+# GTK Command Reference
+
+Use this file when you need option-level details while applying `$gtk-google-tasks`.
+
+## Auth
+
+Register a Desktop OAuth client JSON:
+
+```bash
+gtk auth credentials add /path/to/credentials.json --name default --default
+```
+
+List saved OAuth clients:
+
+```bash
+gtk auth credentials ls
+gtk auth credentials ls --json
+```
+
+Authenticate and inspect state:
+
+```bash
+gtk auth login you@example.com --client default
+gtk auth status --client default
+gtk auth status --client default --account you@example.com --json
+gtk auth logout --client default --account you@example.com
+```
+
+## Task lists
+
+```bash
+gtk lists ls
+gtk lists ls --client default --account you@example.com --json
+```
+
+Notes:
+
+- `gtk` does not yet create or delete task lists.
+- `@default` is the default list target for task commands.
+
+## Tasks
+
+List tasks:
+
+```bash
+gtk tasks ls --list @default
+gtk tasks ls --list @default --show-completed
+gtk tasks ls --list @default --due-after 2026-04-01 --due-before 2026-04-30 --json
+```
+
+Create:
+
+```bash
+gtk tasks add --list @default --title "File taxes"
+gtk tasks add --list @default --title "Book flights" --notes "Check baggage rules" --due 2026-05-15
+```
+
+Update:
+
+```bash
+gtk tasks update <task-id> --list @default --title "Updated title"
+gtk tasks update <task-id> --list @default --notes "Updated notes"
+gtk tasks update <task-id> --list @default --due 2026-05-20
+gtk tasks update <task-id> --list @default --clear-due
+```
+
+Status transitions:
+
+```bash
+gtk tasks done <task-id> --list @default
+gtk tasks reopen <task-id> --list @default
+```
+
+Reorder and delete:
+
+```bash
+gtk tasks move <task-id> --list @default --before <other-task-id>
+gtk tasks move <task-id> --list @default --after <other-task-id>
+gtk tasks delete <task-id> --list @default
+```
+
+## Suggested Automation Pattern
+
+Prefer JSON output:
+
+```bash
+gtk tasks ls --list @default --json
+gtk tasks get <task-id> --list @default --json
+gtk lists ls --json
+```
+
+## Notes
+
+- If more than one saved Google session exists for the same client, pass `--account <email>`.
+- If more than one task list shares the same title, use the list ID instead of the title.
+- Date-only input is parsed in the local timezone before conversion to RFC3339.
