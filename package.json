@@ -1,6 +1,6 @@
 {
   "name": "gtk",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "BYO-credentials Google Tasks CLI",
   "type": "module",
   "bin": {
