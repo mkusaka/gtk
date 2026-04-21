@@ -53,7 +53,7 @@ Create:
 
 ```bash
 gtk tasks add --list @default --title "File taxes"
-gtk tasks add --list @default --title "Book flights" --notes "Check baggage rules" --due 2026-05-15
+gtk tasks add --list @default --title "Book flights" --notes "Check baggage rules" --due 2026-05-15T00:00:00.000Z
 ```
 
 Update:
@@ -61,7 +61,7 @@ Update:
 ```bash
 gtk tasks update <task-id> --list @default --title "Updated title"
 gtk tasks update <task-id> --list @default --notes "Updated notes"
-gtk tasks update <task-id> --list @default --due 2026-05-20
+gtk tasks update <task-id> --list @default --due 2026-05-20T00:00:00.000Z
 gtk tasks update <task-id> --list @default --clear-due
 ```
 
@@ -94,4 +94,5 @@ gtk lists ls --json
 
 - If more than one saved Google session exists for the same client, pass `--account <email>`.
 - If more than one task list shares the same title, use the list ID instead of the title.
-- Date-only input is parsed in the local timezone before conversion to RFC3339.
+- For `gtk tasks add/update --due`, prefer explicit RFC3339 UTC timestamps such as `2026-05-20T00:00:00.000Z`.
+- In `gtk 0.0.1`, date-only `YYYY-MM-DD` input is parsed in the local timezone before conversion to RFC3339, which can shift the stored due date by one day in timezones ahead of UTC.

@@ -49,6 +49,7 @@ Use `gtk` when you want a local, BYO-credentials wrapper around Google Tasks. Pr
    - revoked or expired refresh token
    - Workspace admin block
 5. Keep the BYO credentials model intact. Do not assume shared project credentials exist.
+6. For `gtk tasks add/update --due`, prefer an explicit RFC3339 UTC timestamp such as `2026-04-22T00:00:00.000Z`.
 
 ## Core Workflows
 
@@ -79,8 +80,9 @@ gtk tasks get <task-id> --list @default --json
 ### Create and update tasks
 
 ```bash
-gtk tasks add --list @default --title "File taxes" --due 2026-04-30
+gtk tasks add --list @default --title "File taxes" --due 2026-04-30T00:00:00.000Z
 gtk tasks update <task-id> --list @default --notes "Waiting on accountant"
+gtk tasks update <task-id> --list @default --due 2026-05-20T00:00:00.000Z
 gtk tasks update <task-id> --list @default --clear-due
 ```
 
@@ -99,6 +101,7 @@ gtk tasks delete <task-id> --list @default
 - Do not assume the default Google account in the browser is the one that was actually authorized; `gtk auth status` confirms the saved account.
 - Do not parse human-readable table output in automation.
 - Do not ignore Workspace admin restrictions when auth works for personal Gmail but fails for a Workspace account.
+- Do not rely on date-only `YYYY-MM-DD` input for `gtk tasks add/update --due`. In `gtk 0.0.1`, it is converted from local midnight to RFC3339 and can shift the stored due date by one day in timezones ahead of UTC.
 
 ## Verification Checklist
 
