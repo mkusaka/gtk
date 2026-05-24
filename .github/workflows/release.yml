@@ -1,48 +1,40 @@
 name: Release
-
 on:
   push:
     tags:
       - "v*"
-
 permissions: {}
-
 jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
           run_install: false
-
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24.16.0
-          cache: pnpm
 
+          package-manager-cache: false
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Check formatting
         run: pnpm format:check
-
       - name: Run lints
         run: pnpm lint
-
       - name: Run tests
         run: pnpm test
-
       - name: Build JavaScript output
         run: pnpm build
-
+    timeout-minutes: 90
   release:
     name: Create Release
     needs: verify
@@ -56,7 +48,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
+        with:
+          persist-credentials: false
       - name: Validate release configuration
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -65,12 +58,10 @@ jobs:
             echo "::error::Missing required secret: HOMEBREW_TAP_TOKEN"
             exit 1
           fi
-
       - name: Set formula metadata
         id: formula
         run: |
           echo "formula_name=gtk" >> "$GITHUB_OUTPUT"
-
       - name: Validate tag version
         id: version
         run: |
@@ -90,7 +81,6 @@ jobs:
           echo "VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
           echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub release (draft)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +95,8 @@ jobs:
             --verify-tag \
             --title "gtk $GITHUB_REF_NAME" \
             --generate-notes
-
+    timeout-minutes: 90
+    environment: release
   package:
     name: Package Binary (${{ matrix.label }})
     needs: release
@@ -127,18 +118,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
           run_install: false
-
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24.16.0
-          cache: pnpm
 
+          package-manager-cache: false
       - name: Set up Deno
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
@@ -146,13 +137,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Build JavaScript output
         run: pnpm build
-
       - name: Prune dev dependencies
         run: pnpm prune --prod
-
       - name: Build compiled binary
         env:
           TARGET: ${{ matrix.target }}
@@ -163,7 +151,6 @@ jobs:
           ./gtk --help >/dev/null
           cp gtk release-root/gtk
           cp -R skills/gtk-google-tasks release-root/skills/
-
       - name: Package release archive
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -187,19 +174,17 @@ jobs:
             "sha256": "${SHA256}"
           }
           EOF
-
       - name: Upload archive to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "$GITHUB_REF_NAME" "$ASSET_NAME" --clobber
-
       - name: Upload release metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-metadata-${{ matrix.archive_suffix }}
           path: release-metadata-${{ matrix.archive_suffix }}.json
-
+    timeout-minutes: 90
   publish:
     name: Publish Release
     needs: [release, package]
@@ -212,7 +197,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
-
+    timeout-minutes: 90
   update_homebrew_tap:
     name: Update Homebrew Tap
     needs: [release, package, publish]
@@ -223,7 +208,6 @@ jobs:
         with:
           pattern: release-metadata-*
           merge-multiple: true
-
       - name: Dispatch tap update
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -262,3 +246,6 @@ jobs:
             -f "client_payload[darwin_arm64_sha256]=$DARWIN_ARM64_SHA256" \
             -f "client_payload[darwin_x64_url]=$DARWIN_X64_URL" \
             -f "client_payload[darwin_x64_sha256]=$DARWIN_X64_SHA256"
+    permissions: {}
+    timeout-minutes: 90
+    environment: release
