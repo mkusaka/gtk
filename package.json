@@ -36,9 +36,9 @@
     "open": "^11.0.0"
   },
   "devDependencies": {
-    "@types/node": "25.9.5",
-    "oxfmt": "0.66.0",
-    "oxlint": "1.81.0",
+    "@types/node": "25.9.6",
+    "oxfmt": "0.67.0",
+    "oxlint": "1.82.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
