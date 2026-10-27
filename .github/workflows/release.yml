@@ -3,6 +3,9 @@ on:
   push:
     tags:
       - "v*"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions: {}
 jobs:
   verify:
@@ -156,6 +159,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           RELEASE_URL: ${{ needs.release.outputs.release_url }}
           ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+        shell: bash
         run: |
           ASSET_NAME="gtk-${VERSION}-${ARCHIVE_SUFFIX}.tar.gz"
           tar -C release-root -czf "$ASSET_NAME" .
